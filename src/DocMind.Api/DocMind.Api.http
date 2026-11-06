@@ -1,0 +1,8 @@
+@DocMind.Api_HostAddress = http://localhost:5033
+
+POST {{DocMind.Api_HostAddress}}/api/chat
+Content-Type: application/json
+
+{
+  "message": "What is retrieval-augmented generation?"
+}
