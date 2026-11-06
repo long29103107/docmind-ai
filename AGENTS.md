@@ -27,7 +27,9 @@ Before product or architecture changes, read `PRODUCTION_VISION.md`, `.okf/READM
 
 ## Verification
 
-- Run relevant build or checks for code/configuration changes and report exact outcomes.
+- Run `scripts/verify.ps1` for code/configuration changes and report exact outcomes. Use `-Configuration Debug` when appropriate.
+- CI runs the same script for pull requests and pushes to `main`.
+- Keep tests deterministic; provider integration tests must use fake HTTP handlers rather than real API keys or external network calls.
 - Do not claim a check passed unless it completed successfully.
 - If network/dependency or environment restrictions prevent a check, report the command and blocker.
 - Do not add broad tests or infrastructure unrelated to the requested feature.

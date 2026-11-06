@@ -2,4 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/DocMind.Api/DocMind.Api.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DocMind.Api.Tests/DocMind.Api.Tests.csproj" />
+  </Folder>
 </Solution>

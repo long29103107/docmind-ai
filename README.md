@@ -4,7 +4,7 @@ DocMind AI is an AI-powered document knowledge base. This repository currently c
 
 ## Requirements
 
-- .NET 10 SDK
+- .NET SDK `10.0.400` or a later servicing patch in the same feature band (pinned in `global.json`)
 - An OpenAI API key to use the chat endpoint
 
 ## Run locally
@@ -38,6 +38,16 @@ Successful response:
 ```
 
 The endpoint returns Problem Details for invalid input, missing configuration, provider failures, and timeouts. Provider credentials and response bodies are never logged. The API key is read from `OpenAI:ApiKey`; use .NET User Secrets locally and a managed secret store or environment variable in deployed environments.
+
+## Verification
+
+Run the shared verification script from the repository root:
+
+```powershell
+.\scripts\verify.ps1
+```
+
+The script restores the solution, builds in Release configuration, and runs the test suite. To use Debug configuration, pass `-Configuration Debug`. The API integration tests use a fake provider handler and do not require a real API key or outbound provider calls. GitHub Actions runs the same script for pull requests and pushes to `main`.
 
 ## Configuration
 
