@@ -11,47 +11,48 @@ DocMind AI is a private document knowledge assistant. The MVP lets a local user 
 
 ## Run locally
 
-Start PostgreSQL/pgvector and the backend from `backend/` so the pinned SDK is selected:
+Open two PowerShell terminals from the repository root. Start PostgreSQL/pgvector and the backend in the first terminal:
 
 ```powershell
-cd .\backend
 docker compose up -d database
+Set-Location .\backend
 dotnet restore .\DocMind.slnx
+dotnet user-secrets set "ConnectionStrings:KnowledgeBase" "Host=localhost;Port=5433;Database=docmind;Username=docmind;Password=docmind-local-only" --project .\src\DocMind.Api
 dotnet user-secrets set "OpenAI:ApiKey" "YOUR_API_KEY" --project .\src\DocMind.Api
-dotnet run --project .\src\DocMind.Api --urls http://localhost:5050
+dotnet run --project .\src\DocMind.Api --launch-profile http --urls http://localhost:5050
 ```
 
-The database uses a development-only local credential from `appsettings.Development.json`. Do not reuse it outside a local machine. User Secrets stores the model provider key outside the repository.
+The API is available at `http://localhost:5050`. The Compose database uses host port `5433` so it can run beside a local PostgreSQL on `5432`. At startup, the API creates the pgvector extension, tables, and indexes if they do not already exist; PostgreSQL must be running and the configured connection credentials must work. In Development, Swagger UI is at `http://localhost:5050/swagger`, and the OpenAPI document is at `http://localhost:5050/swagger/v1/swagger.json`. Swagger is disabled outside Development. The Compose database credentials are for local development only. User Secrets stores the database connection string and model provider key outside the repository.
 
-From the repository root, in a second terminal, start the frontend:
+Start the frontend in the second terminal:
 
 ```powershell
-cd .\frontend
+Set-Location .\frontend
 bun install --frozen-lockfile
 bun run dev
 ```
 
-Open the local URL printed by Vite. The development server proxies `/api` requests to `http://localhost:5050`. Set `DOCMIND_API_URL` in the frontend environment if the API uses a different URL. Provider credentials remain on the backend.
+Open the URL printed by Vite (normally `http://localhost:5173`). The development server proxies `/api` requests to `http://localhost:5050`. Set `DOCMIND_API_URL` in the frontend environment if the API uses a different URL. Provider credentials remain on the backend.
+
+If Bun reports `CouldntReadCurrentDirectory` for `bun run dev`, start Vite directly with `bun .\node_modules\vite\bin\vite.js --host 127.0.0.1` from `frontend/`.
 
 ## Chat API
 
-Ask the knowledge base:
+Ask the knowledge base with a streaming request (PowerShell):
 
 ```powershell
-$body = @{ message = "What is retrieval-augmented generation?" } | ConvertTo-Json
-Invoke-RestMethod -Uri "http://localhost:5050/api/knowledge/chat" -Method Post -ContentType "application/json" -Body $body
+$body = @{ message = "What is retrieval-augmented generation?" } | ConvertTo-Json -Compress
+curl.exe -N "http://localhost:5050/api/knowledge/chat" -H "Content-Type: application/json" -d $body
 ```
 
-Successful response:
+The endpoint responds with Server-Sent Events. `token` events contain incremental text; the final `complete` event contains the validated answer, model, and citations. An `error` event contains a safe client-facing message.
 
-```json
-{
-  "answer": "... [S1]",
-  "model": "gpt-4o-mini",
-  "citations": [
-    { "id": "S1", "documentId": "...", "fileName": "guide.pdf", "pageNumber": 4, "chunkIndex": 2, "excerpt": "..." }
-  ]
-}
+```text
+event: token
+data: {"text":"..."}
+
+event: complete
+data: {"answer":"... [S1]","model":"gpt-4o-mini","citations":[{"id":"S1","documentId":"...","fileName":"guide.pdf","pageNumber":4,"chunkIndex":2,"excerpt":"..."}]}
 ```
 
 The endpoint returns an explicit insufficient-evidence answer when no relevant document passages are found. The document API provides `GET /api/documents`, `GET /api/documents/{id}`, `POST /api/documents` with multipart field `file`, and `DELETE /api/documents/{id}`. Supported uploads are PDF, DOCX, TXT, and Markdown, up to 20 MB. Scanned PDFs need OCR and cannot be indexed by this MVP. Provider credentials and response bodies are never logged. Configure `OpenAI:ApiKey` with .NET User Secrets locally and a managed secret store or protected environment variable elsewhere.
@@ -91,8 +92,8 @@ Changing the embedding model or dimensions requires clearing the local database 
 The backend is intentionally a single ASP.NET Core project. The separate `frontend/` folder is a lightweight React client, not another .NET layer or Clean Architecture project.
 
 ```text
+docker-compose.yaml
 backend/
-  compose.yaml
   src/DocMind.Api/
   tests/DocMind.Api.Tests/
   scripts/verify.ps1

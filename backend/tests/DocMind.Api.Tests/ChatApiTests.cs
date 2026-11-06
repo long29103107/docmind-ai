@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using DocMind.Api.Configuration;
+using DocMind.Api.Documents;
 using DocMind.Api.Models;
 using DocMind.Api.Services;
 using Microsoft.AspNetCore.Hosting;
@@ -126,6 +127,57 @@ public sealed class ChatApiTests
         Assert.True(handler.WasCalled);
     }
 
+    [Fact]
+    public async Task ChatService_StreamsProviderDeltasAndRequestsStreamingResponse()
+    {
+        var handler = new StubProviderHandler(async (request, cancellationToken) =>
+        {
+            using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
+            Assert.True(body.RootElement.GetProperty("stream").GetBoolean());
+
+            var events = """
+                data: {"choices":[{"index":0,"delta":{"role":"assistant"}}]}
+
+                data: {"choices":[{"index":0,"delta":{"content":"A grounded "}}]}
+
+                data: {"choices":[{"index":0,"delta":{"content":"answer [S1]."}}]}
+
+                data: [DONE]
+
+                """;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(events, System.Text.Encoding.UTF8, "text/event-stream")
+            };
+        });
+        using var httpClient = new HttpClient(handler);
+        var service = new OpenAiChatService(
+            httpClient,
+            Options.Create(new OpenAiOptions
+            {
+                ApiKey = "test-api-key",
+                BaseUrl = "https://provider.test/v1/",
+                Model = "test-model"
+            }),
+            NullLogger<OpenAiChatService>.Instance);
+        var deltas = new List<string>();
+        var source = ("S1", new RetrievedChunk(Guid.NewGuid(), "guide.pdf", 0, 1, "Grounded source content.", 0.9));
+
+        var answer = await service.StreamGroundedAnswerAsync(
+            "What does the guide say?",
+            [],
+            [source],
+            (text, _) =>
+            {
+                deltas.Add(text);
+                return ValueTask.CompletedTask;
+            },
+            CancellationToken.None);
+
+        Assert.Equal("A grounded answer [S1].", answer);
+        Assert.Equal(["A grounded ", "answer [S1]."], deltas);
+    }
+
     private static ChatApiFactory CreateFactory(HttpMessageHandler handler, string apiKey = "test-api-key") =>
         new(handler, apiKey);
 
@@ -139,6 +191,7 @@ public sealed class ChatApiTests
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
+            builder.UseEnvironment("Testing");
             builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
                 new Dictionary<string, string?>
                 {

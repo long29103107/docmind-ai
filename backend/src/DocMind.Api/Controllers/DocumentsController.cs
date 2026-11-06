@@ -30,7 +30,7 @@ public sealed class DocumentsController(DocumentIngestionService documentService
     [ProducesResponseType<DocumentRecord>(StatusCodes.Status201Created)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status413PayloadTooLarge)]
-    public async Task<ActionResult<DocumentRecord>> Upload([FromForm] IFormFile? file, CancellationToken cancellationToken)
+    public async Task<ActionResult<DocumentRecord>> Upload(IFormFile? file, CancellationToken cancellationToken)
     {
         if (file is null)
         {

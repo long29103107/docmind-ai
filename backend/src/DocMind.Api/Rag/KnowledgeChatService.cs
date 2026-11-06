@@ -59,4 +59,53 @@ public sealed class KnowledgeChatService(
         var safeAnswer = CitationPattern.Replace(answer, match => knownIds.Contains(match.Groups[1].Value) ? match.Value : string.Empty).Trim();
         return new KnowledgeChatResponse(safeAnswer, chatService.Model, citations);
     }
+
+    public async Task<KnowledgeChatResponse> StreamAsync(
+        ChatRequest request,
+        Func<string, CancellationToken, ValueTask> onDelta,
+        CancellationToken cancellationToken)
+    {
+        var questionEmbedding = await embeddingService.EmbedAsync([request.Message], cancellationToken);
+        var chunks = await repository.SearchAsync(
+            questionEmbedding[0],
+            options.Value.MaxRetrievedChunks,
+            options.Value.MinimumSimilarity,
+            cancellationToken);
+        if (chunks.Count == 0)
+        {
+            await onDelta(NoEvidence, cancellationToken);
+            return new KnowledgeChatResponse(NoEvidence, chatService.Model, []);
+        }
+
+        var sources = chunks.Select((chunk, index) => ($"S{index + 1}", chunk)).ToArray();
+        var answer = await chatService.StreamGroundedAnswerAsync(
+            request.Message,
+            request.History ?? [],
+            sources,
+            onDelta,
+            cancellationToken);
+        var usedIds = CitationPattern.Matches(answer)
+            .Select(match => match.Groups[1].Value)
+            .Distinct(StringComparer.Ordinal)
+            .ToHashSet(StringComparer.Ordinal);
+        var citations = sources
+            .Where(source => usedIds.Contains(source.Item1))
+            .Select(source => new ChatCitation(
+                source.Item1,
+                source.chunk.DocumentId,
+                source.chunk.FileName,
+                source.chunk.PageNumber,
+                source.chunk.ChunkIndex,
+                source.chunk.Content))
+            .ToArray();
+
+        if (citations.Length == 0)
+        {
+            return new KnowledgeChatResponse(NoEvidence, chatService.Model, []);
+        }
+
+        var knownIds = citations.Select(citation => citation.Id).ToHashSet(StringComparer.Ordinal);
+        var safeAnswer = CitationPattern.Replace(answer, match => knownIds.Contains(match.Groups[1].Value) ? match.Value : string.Empty).Trim();
+        return new KnowledgeChatResponse(safeAnswer, chatService.Model, citations);
+    }
 }
