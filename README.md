@@ -41,13 +41,13 @@ The endpoint returns Problem Details for invalid input, missing configuration, p
 
 ## Verification
 
-Run the shared verification script from the repository root:
+Run the shared verification command from the repository root:
 
 ```powershell
 .\scripts\verify.ps1
 ```
 
-The script restores the solution, builds in Release configuration, and runs the test suite. To use Debug configuration, pass `-Configuration Debug`. The API integration tests use a fake provider handler and do not require a real API key or outbound provider calls. GitHub Actions runs the same script for pull requests and pushes to `main`.
+The command runs `dotnet test` in Release configuration, which restores and builds the API/test projects before executing the suite. The API integration tests use a fake provider handler and do not require a real API key or outbound provider calls. GitHub Actions runs the same command for pull requests and pushes to `main`.
 
 ## Configuration
 

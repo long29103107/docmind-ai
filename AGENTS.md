@@ -27,7 +27,7 @@ Before product or architecture changes, read `PRODUCTION_VISION.md`, `.okf/READM
 
 ## Verification
 
-- Run `scripts/verify.ps1` for code/configuration changes and report exact outcomes. Use `-Configuration Debug` when appropriate.
+- Run `scripts/verify.ps1` for code/configuration changes and report exact outcomes. It restores, builds, and tests the API through the test project's project reference.
 - CI runs the same script for pull requests and pushes to `main`.
 - Keep tests deterministic; provider integration tests must use fake HTTP handlers rather than real API keys or external network calls.
 - Do not claim a check passed unless it completed successfully.

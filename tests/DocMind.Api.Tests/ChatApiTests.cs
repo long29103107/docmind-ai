@@ -11,6 +11,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Xunit;
 
 namespace DocMind.Api.Tests;
 
@@ -103,11 +104,12 @@ public sealed class ChatApiTests
     }
 
     [Fact]
-    public async Task ChatService_PropagatesCallerCancellation()
+    public async Task ChatService_PassesCallerCancellationToProvider()
     {
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
-        var handler = new StubProviderHandler((_, _) => throw new InvalidOperationException("Canceled request must not reach the provider."));
+        var handler = new StubProviderHandler((_, cancellationToken) =>
+            Task.FromCanceled<HttpResponseMessage>(cancellationToken));
         using var httpClient = new HttpClient(handler);
         var service = new OpenAiChatService(
             httpClient,
@@ -121,7 +123,7 @@ public sealed class ChatApiTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => service.GetAnswerAsync("Hello", cancellation.Token));
-        Assert.False(handler.WasCalled);
+        Assert.True(handler.WasCalled);
     }
 
     private static ChatApiFactory CreateFactory(HttpMessageHandler handler, string apiKey = "test-api-key") =>

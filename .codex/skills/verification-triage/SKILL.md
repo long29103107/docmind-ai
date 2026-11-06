@@ -16,6 +16,6 @@ Use the actual failing command and first meaningful error to choose the smallest
 
 ## Project guidance
 
-- Standard verification: run `./scripts/verify.ps1` (PowerShell) to restore, build, and test using the repository's pinned SDK.
+- Standard verification: run `scripts/verify.ps1` to restore, build, and test using the repository's pinned SDK.
 - Focused checks: use `dotnet test DocMind.slnx --no-restore` or `dotnet build DocMind.slnx --no-restore` when diagnosing a specific stage.
 - For documentation-only changes, read back changed files instead of running an unrelated full build.
