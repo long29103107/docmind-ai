@@ -1,53 +1,70 @@
 # DocMind AI
 
-DocMind AI is an AI-powered document knowledge base. This repository currently contains a minimal ASP.NET Core Web API starter with an OpenAI-compatible chat endpoint. Document ingestion, retrieval, and persistent chat are future milestones.
+DocMind AI is a private document knowledge assistant. The MVP lets a local user upload supported documents, ask questions grounded in their contents, and inspect citations. The repository contains one ASP.NET Core backend project and a React + TypeScript web client built with Vite and Bun.
 
 ## Requirements
 
-- .NET SDK `10.0.400` or a later servicing patch in the same feature band (pinned in `global.json`)
-- An OpenAI API key to use the chat endpoint
+- .NET SDK `10.0.400` or a later servicing patch in the same feature band (pinned in `backend/global.json`)
+- Bun `1.3.13` (pinned in `frontend/package.json`)
+- Docker Desktop with Docker Compose
+- An OpenAI-compatible API key for chat and embeddings
 
 ## Run locally
 
-From the repository root:
+Start PostgreSQL/pgvector and the backend from `backend/` so the pinned SDK is selected:
 
 ```powershell
+cd .\backend
+docker compose up -d database
 dotnet restore .\DocMind.slnx
 dotnet user-secrets set "OpenAI:ApiKey" "YOUR_API_KEY" --project .\src\DocMind.Api
 dotnet run --project .\src\DocMind.Api --urls http://localhost:5050
 ```
 
-User Secrets is already initialized in this project. The key value is stored outside the repository.
+The database uses a development-only local credential from `appsettings.Development.json`. Do not reuse it outside a local machine. User Secrets stores the model provider key outside the repository.
+
+From the repository root, in a second terminal, start the frontend:
+
+```powershell
+cd .\frontend
+bun install --frozen-lockfile
+bun run dev
+```
+
+Open the local URL printed by Vite. The development server proxies `/api` requests to `http://localhost:5050`. Set `DOCMIND_API_URL` in the frontend environment if the API uses a different URL. Provider credentials remain on the backend.
 
 ## Chat API
 
-Send a message:
+Ask the knowledge base:
 
 ```powershell
 $body = @{ message = "What is retrieval-augmented generation?" } | ConvertTo-Json
-Invoke-RestMethod -Uri "http://localhost:5050/api/chat" -Method Post -ContentType "application/json" -Body $body
+Invoke-RestMethod -Uri "http://localhost:5050/api/knowledge/chat" -Method Post -ContentType "application/json" -Body $body
 ```
 
 Successful response:
 
 ```json
 {
-  "answer": "...",
-  "model": "gpt-4o-mini"
+  "answer": "... [S1]",
+  "model": "gpt-4o-mini",
+  "citations": [
+    { "id": "S1", "documentId": "...", "fileName": "guide.pdf", "pageNumber": 4, "chunkIndex": 2, "excerpt": "..." }
+  ]
 }
 ```
 
-The endpoint returns Problem Details for invalid input, missing configuration, provider failures, and timeouts. Provider credentials and response bodies are never logged. The API key is read from `OpenAI:ApiKey`; use .NET User Secrets locally and a managed secret store or environment variable in deployed environments.
+The endpoint returns an explicit insufficient-evidence answer when no relevant document passages are found. The document API provides `GET /api/documents`, `GET /api/documents/{id}`, `POST /api/documents` with multipart field `file`, and `DELETE /api/documents/{id}`. Supported uploads are PDF, DOCX, TXT, and Markdown, up to 20 MB. Scanned PDFs need OCR and cannot be indexed by this MVP. Provider credentials and response bodies are never logged. Configure `OpenAI:ApiKey` with .NET User Secrets locally and a managed secret store or protected environment variable elsewhere.
 
 ## Verification
 
-Run the shared verification command from the repository root:
+Run the shared backend verification command from the repository root:
 
 ```powershell
-.\scripts\verify.ps1
+.\backend\scripts\verify.ps1
 ```
 
-The command runs `dotnet test` in Release configuration, which restores and builds the API/test projects before executing the suite. The API integration tests use a fake provider handler and do not require a real API key or outbound provider calls. GitHub Actions runs the same command for pull requests and pushes to `main`.
+The command runs `dotnet test` in Release configuration, which restores and builds the API/test projects before executing the suite. The API integration tests use a fake provider handler and do not require a real API key or outbound provider calls. GitHub Actions runs this command plus a frozen-lockfile Bun install and frontend production build for pull requests and pushes to `main`.
 
 ## Configuration
 
@@ -57,23 +74,37 @@ The command runs `dotnet test` in Release configuration, which restores and buil
 | `OpenAI:BaseUrl` | `https://api.openai.com/v1/` | OpenAI-compatible API base URL |
 | `OpenAI:Model` | `gpt-4o-mini` | Chat completion model |
 | `OpenAI:MaxCompletionTokens` | `800` | Maximum completion token budget |
+| `OpenAI:EmbeddingModel` | `text-embedding-3-small` | Embedding model |
+| `OpenAI:EmbeddingDimensions` | `1536` | Vector dimensions; must match the configured embedding model |
+| `ConnectionStrings:KnowledgeBase` | Development config | PostgreSQL connection string |
+| `DocumentStorage:RootPath` | `backend/storage/documents` | Private directory for original uploads |
+| `Rag:ChunkSizeCharacters` | `1200` | Maximum source chunk size |
+| `Rag:ChunkOverlapCharacters` | `150` | Overlap between adjacent chunks |
+| `Rag:MaxRetrievedChunks` | `5` | Context passages retrieved per question |
+| `Rag:MinimumSimilarity` | `0.35` | Initial minimum cosine similarity; tune against real documents and questions |
 
 Environment variables use double underscores, for example `OpenAI__ApiKey`.
+Changing the embedding model or dimensions requires clearing the local database and re-indexing documents; vectors from different embedding spaces cannot be mixed.
 
 ## Project layout
 
-The application is intentionally a single ASP.NET Core project. Feature folders keep the HTTP contract, models, configuration, and service code easy to navigate without introducing Clean Architecture projects.
+The backend is intentionally a single ASP.NET Core project. The separate `frontend/` folder is a lightweight React client, not another .NET layer or Clean Architecture project.
 
 ```text
-src/DocMind.Api/
-  Configuration/
-  Controllers/
-  Models/
-  Services/
-  Program.cs
+backend/
+  compose.yaml
+  src/DocMind.Api/
+  tests/DocMind.Api.Tests/
+  scripts/verify.ps1
+  DocMind.slnx
+  global.json
+frontend/
+  src/
+  package.json
+  bun.lock
 ```
 
-Planned directions include document upload and text extraction, chunking and embeddings, PostgreSQL with pgvector, retrieval with source citations, and a frontend client. Add these as cohesive features when they are in scope.
+The frontend connects document management and citation-backed knowledge chat. Chat history is kept only in the active browser session. This is a local/private MVP, not a public multi-user service; authentication, workspace isolation, OCR, background ingestion, cloud storage, and durable conversations remain future phases.
 
 ## Agent guidance
 

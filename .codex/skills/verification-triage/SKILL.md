@@ -16,6 +16,7 @@ Use the actual failing command and first meaningful error to choose the smallest
 
 ## Project guidance
 
-- Standard verification: run `scripts/verify.ps1` to restore, build, and test using the repository's pinned SDK.
-- Focused checks: use `dotnet test DocMind.slnx --no-restore` or `dotnet build DocMind.slnx --no-restore` when diagnosing a specific stage.
+- Standard backend verification: run `backend/scripts/verify.ps1` to restore, build, and test using `backend/global.json`.
+- Focused backend checks: from `backend/`, use `dotnet test DocMind.slnx --no-restore` or `dotnet build DocMind.slnx --no-restore` when diagnosing a specific stage.
+- Frontend build: from `frontend/`, use `bun run build` when diagnosing a client build failure.
 - For documentation-only changes, read back changed files instead of running an unrelated full build.

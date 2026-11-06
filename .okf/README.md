@@ -1,6 +1,6 @@
 # Project Working Guide
 
-This directory contains reusable agent playbooks and lightweight planning conventions adapted from another repository. Its original booking-domain rules were intentionally excluded. `PRODUCTION_VISION.md` and the code in `src/DocMind.Api/` define this product's scope and current behavior.
+This directory contains reusable agent playbooks and lightweight planning conventions adapted from another repository. Its original booking-domain rules were intentionally excluded. `PRODUCTION_VISION.md` and the code in `backend/src/DocMind.Api/` define this product's scope and current behavior.
 
 ## Working approach
 

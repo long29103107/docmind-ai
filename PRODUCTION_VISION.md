@@ -1,121 +1,199 @@
-# DocMind AI — Production Vision
+# DocMind AI — Product Vision and Roadmap
 
 ## 1. Product vision
 
-DocMind AI helps people build a searchable knowledge base from their documents and ask questions in natural language. Answers should be grounded in the user's material and point back to the relevant sources. The product should make document knowledge easier to find while being clear when the available evidence does not support an answer.
+DocMind AI is a private document knowledge assistant. It lets a person collect work documents in one knowledge base, ask questions in natural language, and receive concise answers grounded in those documents. Every factual answer should link to the passages that support it. When the knowledge base does not contain enough evidence, DocMind should say so instead of presenting a guess as a sourced answer.
 
-## 2. Product goals
+The product is a web application backed by an ASP.NET Core API. The browser handles the document library and chat experience; the backend owns document processing, retrieval, model credentials, and access to persistent data.
 
-- Let a user upload and manage documents in a private knowledge base.
-- Extract, normalize, and index document content for semantic retrieval.
-- Answer questions using retrieved passages and provide source citations.
-- Keep the first implementation small enough to understand and extend.
-- Protect document content, credentials, and user data throughout processing.
+## 2. Users and problem
 
-## 3. Initial scope
+### Primary user
 
-The first engineering milestone is a basic chat API that sends a user message to a configured LLM provider. This establishes the ASP.NET Core host, configuration, request validation, provider integration, and error handling before document retrieval is introduced.
+An individual or small-team knowledge worker who has useful information spread across PDFs, Word documents, and text files and needs to find answers without rereading each file.
 
-The current starter includes `POST /api/chat`, an OpenAI-compatible Chat Completions client, configurable model/base URL, and secure local API key configuration through .NET User Secrets. It does not yet perform RAG and must not imply that answers are based on uploaded documents.
+### User problem
 
-## 4. Target users and core journeys
+Keyword search often misses meaning, while asking a general-purpose model can produce plausible answers that are not supported by the user's material. Users need answers that are both easy to ask for and easy to verify against a source document.
 
-### Initial chat journey
+## 3. Product principles
 
-1. A developer configures an LLM API key outside source control.
-2. A client submits a non-empty message to the chat endpoint.
-3. The API validates the request and sends it to the configured provider.
-4. The API returns the answer and model name, or a safe Problem Details error.
+- **Ground every answer:** use retrieved passages as the evidence for responses about uploaded content.
+- **Show the evidence:** citations identify the source document and a useful location, with a passage preview.
+- **Be honest about gaps:** abstain when retrieval does not find relevant evidence; do not silently fall back to general model knowledge.
+- **Keep private data private:** document contents and prompts are sensitive. Do not expose them in logs, public endpoints, or browser-visible provider credentials.
+- **Make capability visible:** distinguish connected, processing, failed, and ready documents; do not imply that unimplemented RAG features work.
+- **Keep the system understandable:** retain one ASP.NET Core backend project, a separate React + TypeScript frontend, and feature-oriented folders rather than adding architecture layers without a concrete need.
 
-### Future document question journey
+## 4. MVP — first usable product
 
-1. A user creates or selects a knowledge base.
-2. The user uploads a supported document and sees its processing status.
-3. The system extracts text, divides it into searchable chunks, and creates embeddings.
-4. The user asks a question; the system retrieves relevant chunks and generates a grounded answer with citations.
-5. The user can inspect cited source passages and manage or remove documents.
+The first product milestone is a usable, single-user document RAG chat running locally or in a private development environment. It delivers the core promise end to end: add documents, index them, ask questions, and verify answers from citations.
 
-## 5. Product principles
+### In scope
 
-- **Grounded answers:** Once RAG is available, distinguish retrieved evidence from general model knowledge and say when evidence is insufficient.
-- **Traceable sources:** Citations should resolve to a document and a meaningful location such as a page or section.
-- **Private by default:** Documents and prompts are sensitive user data. Minimize collection, access, logging, and retention.
-- **Honest capability:** The initial chat API is general LLM chat; document-grounded answers arrive only with retrieval.
-- **Useful errors:** Report actionable client-safe errors without exposing provider secrets, internal exceptions, or sensitive request content.
-- **Simple architecture:** Keep the application in one ASP.NET Core project. Use cohesive feature folders and add abstractions only when they address a real need.
+1. **One private knowledge base** for the local installation. User accounts, sharing, and multi-tenant workspaces are deferred. The MVP is for local/private use and must not be exposed to the public internet without authentication and abuse controls.
+2. **Document library:** upload, list, inspect processing state, and delete documents.
+3. **Initial file formats:** PDF, DOCX, TXT, and Markdown. Reject unsupported or oversized uploads with actionable errors. Do not run OCR in the MVP; scanned PDFs without extractable text must fail clearly.
+4. **Document processing:** extract text, retain source location metadata where available, split text into bounded overlapping chunks, create embeddings, and store document metadata, chunks, and vectors.
+5. **Grounded chat:** retrieve the best matching chunks for each question, send only bounded retrieved context to the configured chat model, and return an answer with citations and short source passages.
+6. **Insufficient evidence:** when no chunk meets the configured relevance threshold, respond that the answer was not found in the knowledge base. Do not answer from model knowledge alone.
+7. **Web client:** provide document upload/list/delete, an indexed/failed status, a chat view, loading/error/empty states, and expandable citations that identify the file and source location.
+8. **Local persistence:** PostgreSQL with pgvector for metadata, chunks, and embeddings; local filesystem storage for uploaded originals outside the source tree. Provide a local database setup that a developer can start and stop.
+9. **Provider configuration:** keep chat and embedding credentials on the backend. Use .NET User Secrets locally and protected environment configuration elsewhere. Support an OpenAI-compatible chat and embeddings API.
+
+### MVP limits and assumptions
+
+- Single-user, single knowledge base; no login or sharing.
+- Synchronous processing is acceptable for the initial bounded file-size limit. The API must report a clear failure instead of leaving a document indefinitely in a processing state.
+- Citations use page numbers for PDFs where extraction provides them. DOCX, TXT, and Markdown citations use a chunk/section location and source preview.
+- Uploaded originals and extracted content stay on the local/private installation. They are not sent to a model except for the minimum retrieved passages needed to answer a question.
+- The exact upload size, chunk size, retrieval count, and similarity threshold are configuration values with conservative defaults, not user-visible promises.
+
+### MVP acceptance criteria
+
+- A developer can start the database, backend, and frontend using documented commands and configure provider credentials without putting a secret in source control.
+- A user can upload a supported document, see it become ready or failed, and delete it.
+- A supported document's extracted content is chunked and embedded; a question can retrieve relevant chunks from the knowledge base.
+- An answer based on retrieved content includes citations that open or display the cited source passage and its location.
+- An unrelated question receives an explicit insufficient-evidence response and no fabricated citation.
+- Invalid, unsupported, empty, and oversized uploads produce safe client-facing errors.
+- Deleting a document removes its metadata, vectors, and stored original from the local installation.
+- The chat and upload APIs honor cancellation, enforce configured limits, and never return provider secrets or internal exception details.
+- The interface clearly communicates document processing, retrieval failures, and the private/local scope of this MVP.
+
+### Out of scope for MVP
+
+- Public multi-user hosting, account registration, organization roles, sharing, or tenant isolation.
+- OCR for scanned documents; spreadsheets, images, audio, and video.
+- Cloud object storage, third-party document connectors, and automated sync.
+- Background queues, distributed workers, high availability, and large-scale ingestion.
+- Conversation history persisted across browser sessions, team collaboration, and advanced admin dashboards.
+- Fine-tuning, agentic actions, web search, or answers that silently mix retrieved material with uncited general knowledge.
+
+## 5. User journeys
+
+### Set up a knowledge base
+
+1. The developer starts PostgreSQL, the API, and the web client and configures chat and embedding provider settings outside source control.
+2. The user opens the local DocMind web client and sees an empty document library.
+3. The user uploads a supported document and sees its processing state.
+4. The user sees the document marked ready, or a clear failure explaining what needs attention.
+
+### Ask a grounded question
+
+1. The user asks a question in the chat view.
+2. The API embeds the question and retrieves relevant passages from the knowledge base.
+3. If useful evidence exists, the model answers using the retrieved passages and the UI shows citations.
+4. The user opens a citation to inspect the source name, location, and passage preview.
+5. If useful evidence does not exist, DocMind says the knowledge base does not contain enough information to answer.
+
+### Remove a document
+
+1. The user selects a document in the library and confirms deletion.
+2. The API removes its original file, metadata, extracted chunks, and vectors.
+3. Future retrieval cannot cite the deleted document.
 
 ## 6. Technical direction
 
-- **Backend:** ASP.NET Core Web API on .NET 10, C#.
-- **Application shape:** One deployable project (`DocMind.Api`) with feature-oriented folders.
-- **Initial model provider:** OpenAI-compatible Chat Completions API through `IHttpClientFactory`.
-- **Future data store:** PostgreSQL for application data and pgvector for embeddings, subject to deployment needs.
-- **Future document pipeline:** Upload validation, safe storage, format-specific extraction, chunking, embedding, indexing, and observable processing status.
-- **Future client:** A separate web client may be added when a usable end-user interface is in scope.
+- **Backend:** ASP.NET Core Web API on .NET 10 and C# in the single `backend/src/DocMind.Api` project.
+- **Frontend:** React + TypeScript single-page application in `frontend/`, built with Vite and Bun.
+- **Database and vector search:** PostgreSQL with the pgvector extension.
+- **Document originals:** private local filesystem storage for the MVP, outside the public web root and source tree.
+- **Text extraction:** format-specific extractors for PDF, DOCX, TXT, and Markdown, with size, text, and processing limits.
+- **Embeddings and chat:** configurable OpenAI-compatible endpoints; secrets remain on the backend.
+- **Local orchestration:** Docker Compose for PostgreSQL/pgvector; API and frontend run as developer processes initially.
+- **API contract:** typed request/response models and Problem Details errors. Keep frontend types aligned with the actual API.
 
-The current starter deliberately has no database, file storage, authentication, or vector search. These are not silently simulated by the chat endpoint.
+Use cohesive feature folders and built-in .NET facilities. Add a new deployable, persistence abstraction, or architecture layer only when a concrete requirement justifies it.
 
-## 7. API direction
+## 7. Phase plan
 
-### Implemented
+### Phase 0 — Product and local foundation
 
-`POST /api/chat`
+- Lock MVP scope and document accepted defaults.
+- Add PostgreSQL/pgvector local setup, backend persistence configuration, and schema initialization/migration.
+- Keep the existing chat API and the frontend build working while the application layout evolves.
 
-Request:
+**Exit:** a developer can start the local database and both applications from documented instructions; the backend can connect to the database without secrets committed to the repository.
 
-```json
-{ "message": "What is RAG?" }
-```
+**Current status:** Implemented in code; local database startup still needs an end-to-end smoke check.
 
-Response:
+### Phase 1 — MVP document ingestion
 
-```json
-{ "answer": "...", "model": "gpt-4o-mini" }
-```
+- Implement safe PDF, DOCX, TXT, and Markdown upload and extraction.
+- Store originals and document metadata; report processing status and actionable failures.
+- Chunk extracted text, create embeddings, persist vectors, list documents, and delete all related data safely.
 
-The request message must contain 1–8000 characters. Errors use Problem Details. The endpoint currently has no authentication and is intended as a local development starter; deployments must add authentication, authorization, abuse controls, and operational safeguards before public exposure.
+**Exit:** supported files can be uploaded, indexed, inspected, and deleted; extracted text and vectors persist across API restarts.
 
-### Future API capabilities
+**Current status:** Implemented in code; needs verification against a running pgvector instance and a configured embedding provider.
 
-- Knowledge base and document management.
-- Document processing status and retry operations.
-- Conversation and message history.
-- Retrieval-grounded chat responses with citations.
+### Phase 2 — MVP grounded chat
 
-Define detailed contracts when each feature is implemented.
+- Embed each question and retrieve relevant chunks from the selected knowledge base.
+- Add bounded context construction, a grounded-answer prompt, relevance threshold, insufficient-evidence behavior, and citation response models.
+- Integrate chat history for the current browser session without claiming durable conversation storage.
 
-## 8. Security and reliability requirements
+**Exit:** relevant questions return source-backed answers; unsupported questions abstain; citations identify retrievable source passages.
+
+**Current status:** Implemented in code; retrieval thresholds and citation quality need evaluation with representative documents.
+
+### Phase 3 — MVP web experience and release gate
+
+- Connect the React client to document management and RAG chat APIs.
+- Implement upload progress/status, document deletion, citation inspection, and clear empty/loading/error states.
+- Document local setup and limitations; add frontend build verification to CI.
+
+**Exit:** the acceptance criteria in Section 4 pass end to end in a private local environment; public internet exposure remains disabled until the next phase.
+
+**Current status:** Document library, grounded chat UI, Bun lockfile, and frontend CI build gate are implemented. End-to-end acceptance has not yet been verified.
+
+### Phase 4 — Private deployment hardening
+
+- Add authentication, authorization, and user/workspace isolation before shared or public deployment.
+- Move originals to managed object storage where needed; add background ingestion, retry, and cleanup jobs.
+- Add operational health, structured privacy-safe diagnostics, backups, retention controls, rate limits, and deployment automation.
+
+**Exit:** documented threat and operational requirements are met for the chosen deployment environment.
+
+### Phase 5 — Product expansion
+
+- Evaluate OCR for scanned PDFs, more file types, and external document connectors.
+- Add durable conversations, workspace sharing, richer retrieval controls, and user feedback/evaluation workflows when supported by product needs.
+
+**Exit:** each expansion has its own acceptance criteria and evidence that it improves the core document-questioning journey.
+
+## 8. Current implementation status
+
+- Implemented in code: .NET 10 backend, PostgreSQL/pgvector setup, document upload/list/delete, PDF/DOCX/TXT/Markdown extraction, chunking and embeddings, vector retrieval, grounded chat with citations, and a React/Bun document library and chat UI.
+- Also retained: `POST /api/chat` as a general LLM chat endpoint. The product UI uses `POST /api/knowledge/chat` for grounded RAG.
+- Not implemented: authentication, multi-user isolation, OCR, asynchronous ingestion, cloud storage, durable conversations, and production deployment hardening.
+- Local database and provider-backed end-to-end behavior still need a smoke check. A successful build alone does not verify RAG quality or privacy controls.
+
+## 9. Security, privacy, and reliability
 
 - Never commit API keys, tokens, or production credentials.
-- Use .NET User Secrets for local development and a managed secret store or protected environment configuration in deployment.
-- Do not log API keys, document content, full prompts, or provider response bodies.
-- Apply input limits, upload size/type validation, rate limits, authentication, authorization, and tenant isolation as the corresponding features are introduced.
-- Use cancellation tokens and bounded provider timeouts.
-- Return sanitized Problem Details and preserve diagnostic context in structured server logs without sensitive payloads.
-- Do not claim public production readiness until authentication, authorization, privacy, abuse controls, monitoring, and deployment practices are in place.
-
-## 9. Milestone outline
-
-1. **Chat API foundation:** ASP.NET Core host, provider configuration, chat request/response, validation, safe errors, and developer setup.
-2. **Document ingestion:** supported formats, storage, extraction, processing status, and content limits.
-3. **Chunking and embeddings:** consistent chunk metadata and embedding generation.
-4. **Vector retrieval:** PostgreSQL/pgvector schema, similarity search, and relevance controls.
-5. **Grounded answers:** retrieval prompt, citations, insufficient-evidence behavior, and traceability.
-6. **User experience and operations:** knowledge base UI, identity and access controls, observability, deployment, and lifecycle management.
-
-This outline is directional. Implement a milestone only when requested and after refining its acceptance criteria.
+- Do not log API keys, full prompts, document text, retrieved passages, or provider response bodies.
+- Validate file extension, declared content type, file signature where practical, size, and extracted text size; generate storage names server-side.
+- Keep uploaded files outside the web root; prevent path traversal and do not trust client-provided paths or document identifiers.
+- Apply cancellation and bounded timeouts to extraction, embedding, retrieval, and chat operations.
+- Use private local-only defaults until authentication and authorization are implemented. Do not claim the MVP is safe for public exposure.
+- Delete a document's file, metadata, chunks, and vectors as one recoverable operation; report partial cleanup failures for repair.
+- Return safe Problem Details errors while retaining only non-sensitive operational context in server logs.
 
 ## 10. Definition of done
 
-- The change fulfills a documented user outcome and stays within the current milestone.
-- Input validation and safe failure behavior are covered for the changed feature.
-- Secrets and sensitive content are not committed or written to logs.
-- README and API documentation match actual behavior.
-- Relevant build or checks are run and their results reported accurately.
-- The feature does not imply capabilities that have not been implemented.
+- The change implements an observable user outcome that matches the current phase.
+- API validation, limits, cancellation, and safe failure behavior match the feature contract.
+- The frontend reflects actual backend state and does not invent product capability.
+- Secrets and document contents are not committed or logged.
+- README, API contracts, and this roadmap reflect the implemented behavior and accepted boundaries.
+- Relevant builds and checks are run and reported accurately; unrun checks are labeled clearly.
 
-## 11. How to use this file
+## 11. How to use this vision
 
-Before implementation, read this vision and `AGENTS.md`. Identify the milestone and user outcome, inspect the existing code, and state the acceptance criteria. Keep changes in the single `DocMind.Api` project unless a concrete user need justifies an additional deployable. Update this document when an accepted product boundary or durable architecture decision changes.
+Start with Phase 0 and then implement Phase 1 through Phase 3 in order. Keep each phase as a reviewable slice, update the status in Section 8 as behavior becomes real, and do not begin later-phase identity, deployment, or expansion work until its prerequisites and acceptance criteria are clear.
 
-To run the current starter, follow the setup and chat API instructions in `README.md`. The first endpoint requires an OpenAI API key configured via User Secrets or a protected environment variable.
+Before a multi-requirement feature, inspect the current code and write a concise feature spec from the `.okf/templates/spec.md` template. Update this file only when product scope, a phase boundary, or a durable architecture decision changes.
+
+For local setup and commands, follow `README.md`. The API and frontend live under `backend/` and `frontend/` respectively.

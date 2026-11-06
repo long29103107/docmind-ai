@@ -9,3 +9,6 @@ obj/
 .env.*
 !.env.example
 secrets.json
+frontend/node_modules/
+frontend/dist/
+backend/storage/

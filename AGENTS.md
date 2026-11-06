@@ -10,11 +10,12 @@ Before product or architecture changes, read `PRODUCTION_VISION.md`, `.okf/READM
 
 ## Project boundaries
 
-- Backend: ASP.NET Core Web API, C#, .NET 10.
-- Keep the application in one project (`src/DocMind.Api`). Do not split it into Clean Architecture projects.
+- Backend: ASP.NET Core Web API, C#, .NET 10, kept in the single `backend/src/DocMind.Api` project. Do not split it into Clean Architecture projects.
+- Frontend: React + TypeScript client in `frontend/`, built with Vite and Bun, consuming the API through its `/api` development proxy.
 - Prefer cohesive feature folders and built-in .NET facilities. Add dependencies and abstractions only for a concrete requirement.
-- Treat the initial chat endpoint as general LLM chat, not document-grounded RAG.
-- Add PostgreSQL/pgvector, document storage, authentication, and frontend capabilities only as explicit features with clear acceptance criteria.
+- Treat `POST /api/chat` as general LLM chat and `POST /api/knowledge/chat` as the document-grounded RAG endpoint.
+- Keep document uploads and originals private, outside the web root; validate type, size, and content server-side. Do not claim public multi-user safety before authentication and workspace isolation exist.
+- Keep citations aligned with retrieved passages. Do not fall back to uncited general model knowledge when retrieval finds no supporting evidence.
 - Preserve unrelated user changes. Never run `git clean` or delete user files.
 
 ## Implementation conventions
@@ -27,8 +28,9 @@ Before product or architecture changes, read `PRODUCTION_VISION.md`, `.okf/READM
 
 ## Verification
 
-- Run `scripts/verify.ps1` for code/configuration changes and report exact outcomes. It restores, builds, and tests the API through the test project's project reference.
-- CI runs the same script for pull requests and pushes to `main`.
+- Run `backend/scripts/verify.ps1` for backend code/configuration changes and report exact outcomes. It restores, builds, and tests the API through the test project's project reference.
+- For frontend changes, run `bun run build` from `frontend/` when dependencies are available; report if it is blocked or skipped.
+- CI runs the backend verification script and a frozen-lockfile Bun frontend build for pull requests and pushes to `main`.
 - Keep tests deterministic; provider integration tests must use fake HTTP handlers rather than real API keys or external network calls.
 - Do not claim a check passed unless it completed successfully.
 - If network/dependency or environment restrictions prevent a check, report the command and blocker.
